@@ -1,0 +1,21 @@
+{:dependencies [[binaryage/devtools "0.9.7"]
+                [re-frame "0.10.6"]
+                [orchestra "2018.12.06-2"]]
+ :nrepl {:port 7000}
+ :source-paths ["src" "test"]
+ :builds {:browser {:target :browser
+                    :asset-path "/js"
+                    :devtools {:http-port 8000
+                               :http-root "public"
+                               :http-handler shadow.http.push-state/handle
+                               :after-load kahuin.web.main/render}
+                    :dev {:modules {:base {:entries [devtools.preload kahuin.web.main]}}}
+                    :release {:modules {:base {:entries [kahuin.web.main]}}
+                              :output-dir "release/js"
+                              :compiler-options {:optimizations :advanced}}}
+          :test {:target :browser-test
+                 :test-dir "public/test"
+                 :devtools {:http-port 8020
+                            :http-root "public/test"}}
+          :karma-test {:target :karma
+                       :output-to "target/karma-test.js"}}}

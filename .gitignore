@@ -1,0 +1,12 @@
+/.nrepl-*
+/.shadow-cljs
+/node_modules
+/public/css
+/public/js
+/public/test
+/release
+/target
+
+*.iml
+.idea
+pom.xml

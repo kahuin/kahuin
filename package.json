@@ -1,0 +1,29 @@
+{
+  "name": "kahuin",
+  "version": "0.1.0",
+  "scripts": {
+    "webrtc-server": "webrtc-star",
+    "test:karma": "shadow-cljs compile karma-test && karma start --single-run",
+    "test": "run-p webrtc-server test:karma",
+    "watch:cljs": "shadow-cljs watch browser test",
+    "watch": "run-p webrtc-server watch:*",
+    "release:cljs": "shadow-cljs release browser",
+    "release:html": "mkdir -p release && cp public/index.html release",
+    "release": "run-s release:*"
+  },
+  "dependencies": {
+    "create-react-class": "^15.6.2",
+    "libp2p": "^0.25.2",
+    "libp2p-kad-dht": "^0.14.13",
+    "libp2p-webrtc-star": "^0.15.8",
+    "react": "^16.0.0",
+    "react-dom": "^16.0.0"
+  },
+  "devDependencies": {
+    "karma": "^4.1.0",
+    "karma-chrome-launcher": "^2.2.0",
+    "karma-cljs-test": "^0.1.0",
+    "npm-run-all": "^4.1.5",
+    "shadow-cljs": "^2.8.36"
+  }
+}
