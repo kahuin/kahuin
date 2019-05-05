@@ -73,11 +73,16 @@
       (fn [[node1 node2]]
         (go-loop []
           (let [[event node arg] (a/<! (::node/ch node1))]
-            (if (and (= ::node/connect event)
+            (cond
+              (= event ::node/error)
+              (do (is (not arg))
+                  (done))
+              (and (= ::node/connect event)
                      (= (:kahuin.p2p.keys/public node2) arg))
               (testing "node 1 connects to node 2"
                 (is (= node1 node))
                 (done))
+              :default
               (recur))))))))
 
 (deftest put!-test
@@ -87,7 +92,11 @@
         (node/put! node1 "abc" :bar)
         (go-loop []
           (let [[event node & args] (a/<! (::node/ch node1))]
-            (if (= ::node/dht:put event)
+            (case event
+              ::node/error
+              (do (is (not (first args)))
+                  (done))
+              ::node/dht:put
               (testing "node1 put"
                 (is (= node1 node))
                 (is (= ["abc" :bar] args))
@@ -107,12 +116,14 @@
                   (done))
               (let [[event node arg] val]
                 (case event
+                  ::node/error
+                  (do (is (not arg))
+                      (done))
                   ; Wait for node2 to connect to node1
                   ::node/connect
-                  (let [peer-id arg]
-                    (when (= peer-id (:kahuin.p2p.keys/public node1))
-                      (node/get! node2 "abc"))
-                    (recur))
+                  (do (when (= arg (:kahuin.p2p.keys/public node1))
+                        (node/get! node2 "abc"))
+                      (recur))
                   ::node/dht:put
                   ; Then get
                   (testing "node2 get"
