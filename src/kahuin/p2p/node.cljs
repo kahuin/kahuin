@@ -23,9 +23,13 @@
 (defn- put-error! [ch node ^js/Error js-error when]
   (a/put! ch [::error node {:when when :message (.-message js-error)}]))
 
+(defn- peer-info->id
+  [peer-info]
+  (.toB58String (.-id peer-info)))
+
 (defn- create-node*
   [peer-info]
-  (let [id (.toB58String (.-id peer-info))
+  (let [id (peer-info->id peer-info)
         transport (transport/init id)
         options {:peerInfo peer-info
                  :modules (merge (:modules transport) {:dht Kad})
@@ -44,6 +48,8 @@
         (if err (put-error! ch nil err ::create-node)
                 (a/put! ch (merge keypair (create-node* peer-info))))))
     ch))
+
+(s/fdef <create-node :args (s/cat :peer-id #(instance? PeerId %) :keypair ::keys/keypair) :ret chan?)
 
 (defn <load
   "Creates and returns a channel that contains the node loaded from the base58-encoded or `[::error nil error-map]`."
@@ -66,22 +72,8 @@
 
 (s/fdef <new :ret chan?)
 
-(defn- event-arg->clj
-  [arg]
-  (if (.-id arg)
-    {::impl arg ::peer-id (.toB58String (.-id arg))}
-    arg))
-
-(def node-events
-  #{::start
-    ::error
-    ::peer:discovery
-    ::peer:connect
-    ::peer:disconnect
-    ::connection:start
-    ::connection:end})
-
 (defn stop!
+  ""
   [{::keys [impl ch] :as node}]
   (.removeAllListeners impl)
   (.stop impl
@@ -98,14 +90,10 @@
    On start the node's ::ch will start getting events, starting with a
    ::start event."
   [{::keys [impl ch] :as node}]
-  (doseq [ev node-events]
-    (.on impl
-         (name ev)
-         (fn [& args]
-           (a/put! ch (->> args
-                           (map event-arg->clj)
-                           (concat [ev node])
-                           (vec))))))
+  (.on impl "start" (fn [] (a/put! ch [::start node])))
+  (.on impl "error" (fn [err] (put-error! ch node err ::impl)))
+  (.on impl "connection:start" (fn [peer-info] (a/put! ch [::connect node (peer-info->id peer-info)])))
+  (.on impl "connection:end" (fn [peer-info] (a/put! ch [::disconnect node (peer-info->id peer-info)])))
   (.start impl
           (fn [err]
             (when err
@@ -116,6 +104,7 @@
 (s/fdef start! :args (s/cat :node ::node) :ret nil?)
 
 (defn put!
+  ""
   [{::keys [impl ch] :as node} key value]
   (.put (.-dht impl)
         (encoding/base58->buffer key)
@@ -129,6 +118,7 @@
 (s/fdef put! :args (s/cat :node ::node :key encoding/base58? :value any?) :ret nil?)
 
 (defn get!
+  ""
   [{::keys [impl ch] :as node} key]
   (.get (.-dht impl)
         (encoding/base58->buffer key)

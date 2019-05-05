@@ -67,16 +67,15 @@
                 (done))
               (recur))))))))
 
-(deftest discovery-test
+(deftest connection-test
   (async done
     (with-2-test-nodes
       (fn [[node1 node2]]
         (go-loop []
-          (let [[event node & args] (a/<! (::node/ch node1))]
-            (if (and (= ::node/peer:discovery event)
-                     (= (:kahuin.p2p.keys/public node2)
-                        (-> args first ::node/peer-id)))
-              (testing "node 1 discovers node 2"
+          (let [[event node arg] (a/<! (::node/ch node1))]
+            (if (and (= ::node/connect event)
+                     (= (:kahuin.p2p.keys/public node2) arg))
+              (testing "node 1 connects to node 2"
                 (is (= node1 node))
                 (done))
               (recur))))))))
@@ -101,17 +100,19 @@
       (fn [[node1 node2]]
         (node/put! node1 "abc" :bar)
         (go-loop []
-          (let [[event node & args] (a/<! (::node/ch node2))]
-            (println event args)
-            ;(.log js/console (.-_dht (::node/impl node)))
+          (let [[event node arg] (a/<! (::node/ch node2))]
+            (println event arg)
             (case event
-              ::node/peer:discovery
-              (do (when (= node node2)
-                    (node/get! node2 "abc"))
-                  (recur))
+              ; Wait for node2 to connect to node1
+              ::node/connect
+              (let [peer-id arg]
+                (when (= peer-id (:kahuin.p2p.keys/public node1))
+                  (node/get! node2 "abc"))
+                (recur))
               ::node/dht:put
+              ; Then get
               (testing "node2 get"
                 (is (= node2 node))
-                (is (= ["abc" :bar] args))
+                (is (= ["abc" :bar] arg))
                 (done))
               (recur))))))))
