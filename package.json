@@ -9,6 +9,7 @@
     "watch": "run-p webrtc-server watch:*",
     "release:cljs": "shadow-cljs release browser",
     "release:html": "mkdir -p release && cp public/index.html release",
+    "release:report": "shadow-cljs run shadow.cljs.build-report browser release-report.html",
     "release": "run-s release:*"
   },
   "dependencies": {

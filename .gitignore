@@ -5,6 +5,7 @@
 /public/js
 /public/test
 /release
+/release-report.html
 /target
 
 *.iml
