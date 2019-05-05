@@ -100,19 +100,23 @@
       (fn [[node1 node2]]
         (node/put! node1 "abc" :bar)
         (go-loop []
-          (let [[event node arg] (a/<! (::node/ch node2))]
-            (println event arg)
-            (case event
-              ; Wait for node2 to connect to node1
-              ::node/connect
-              (let [peer-id arg]
-                (when (= peer-id (:kahuin.p2p.keys/public node1))
-                  (node/get! node2 "abc"))
-                (recur))
-              ::node/dht:put
-              ; Then get
-              (testing "node2 get"
-                (is (= node2 node))
-                (is (= ["abc" :bar] arg))
-                (done))
-              (recur))))))))
+          (let [timeout-ch (a/timeout 10000)
+                [val port] (a/alts! [timeout-ch (::node/ch node2)])]
+            (if (= timeout-ch port)
+              (do (is (not :timed-out))
+                  (done))
+              (let [[event node arg] val]
+                (case event
+                  ; Wait for node2 to connect to node1
+                  ::node/connect
+                  (let [peer-id arg]
+                    (when (= peer-id (:kahuin.p2p.keys/public node1))
+                      (node/get! node2 "abc"))
+                    (recur))
+                  ::node/dht:put
+                  ; Then get
+                  (testing "node2 get"
+                    (is (= node2 node))
+                    (is (= ["abc" :bar] arg))
+                    (done))
+                  (recur))))))))))
