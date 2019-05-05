@@ -4,9 +4,9 @@
     [cljs.spec.alpha :as s]
     [kahuin.p2p.encoding :as encoding]
     [kahuin.p2p.keys :as keys]
+    [kahuin.p2p.transport :as transport]
     ["libp2p" :as Node]
     ["libp2p-kad-dht" :as Kad]
-    ["libp2p-webrtc-star" :as WStar]
     ["peer-info" :as PeerInfo]
     ["peer-id" :as PeerId]))
 
@@ -23,22 +23,15 @@
 (defn- put-error! [ch node ^js/Error js-error when]
   (a/put! ch [::error node {:when when :message (.-message js-error)}]))
 
-(defn- id->address
-  [id]
-  (str "/ip4/0.0.0.0/tcp/9090/ws/p2p-webrtc-star/p2p/" id))
-
-(defn- peer-info->node
+(defn- create-node*
   [peer-info]
   (let [id (.toB58String (.-id peer-info))
-        address (id->address id)
-        wstar (WStar.)
+        transport (transport/init id)
         options {:peerInfo peer-info
-                 :modules {:transport [wstar]
-                           :peerDiscovery [(.-discovery wstar)]
-                           :dht Kad}
-                 :config {:dht {:enabled true}}}
+                 :modules (merge (:modules transport) {:dht Kad})
+                 :config (merge (:config transport) {:dht {:enabled true}})}
         node (Node. (clj->js options))]
-    (.add (.-multiaddrs peer-info) address)
+    (.add (.-multiaddrs peer-info) (::transport/address transport))
     {::impl node
      ::ch (a/chan (a/sliding-buffer 16))}))
 
@@ -49,7 +42,7 @@
       peer-id
       (fn [err peer-info]
         (if err (put-error! ch nil err ::create-node)
-                (a/put! ch (merge keypair (peer-info->node peer-info))))))
+                (a/put! ch (merge keypair (create-node* peer-info))))))
     ch))
 
 (defn <load
