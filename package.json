@@ -16,6 +16,8 @@
     "create-react-class": "^15.6.2",
     "libp2p": "^0.25.2",
     "libp2p-kad-dht": "^0.14.13",
+    "libp2p-mplex": "^0.8.5",
+    "libp2p-spdy": "^0.13.3",
     "libp2p-webrtc-star": "^0.15.8",
     "react": "^16.0.0",
     "react-dom": "^16.0.0"

@@ -3,8 +3,11 @@
     [cljs.core.async :as a :refer-macros [go]]
     [cljs.spec.alpha :as s]
     [kahuin.p2p.encoding :as encoding]
+    [goog.object :as gobj]
+    ["buffer" :as buffer]
     ["libp2p-crypto" :as crypto]
-    ["libp2p-crypto-secp256k1" :as crypto-secp256k1]))
+    ["libp2p-crypto-secp256k1" :as crypto-secp256k1]
+    ["peer-id" :as PeerId]))
 
 (defn- chan?
   [ch]
@@ -121,3 +124,21 @@
 (s/fdef <validated
         :args (s/cat :keypair (s/keys :req [::public]), :msg ::signed)
         :ret chan?)
+
+(defn- keypair->PeerId
+  [keypair]
+  (let [private-key (::private keypair)
+        public-key (.-public private-key)]
+    (PeerId. (.-bytes public-key) private-key public-key)))
+
+;; Some monkey-patching
+
+(gobj/set
+  PeerId
+  "createFromPubKey"
+  (fn [pub-key-str-or-buf cb]
+    (let [buf (if (string? pub-key-str-or-buf)
+                (buffer/Buffer.from pub-key-str-or-buf "base64")
+                pub-key-str-or-buf)
+          public-key (crypto/keys.unmarshalPublicKey buf)]
+      (cb nil (PeerId. buf nil public-key)))))

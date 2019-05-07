@@ -33,10 +33,10 @@
       (let [node (a/<! (node/<load test-base-58-encoded-node))]
         (testing "start node"
           (node/start! node)
-          (is (= [::node/start node] (a/<! (::node/ch node)))))
+          (is (= [::node/start node] (a/<! (::node/event-ch node)))))
         (testing "stop node"
           (node/stop! node)
-          (is (= (async-protocols/closed? (::node/ch node)))))
+          (is (= (async-protocols/closed? (::node/event-ch node)))))
         (done)))))
 
 (def test-base-58-encoded-node-1
@@ -45,89 +45,76 @@
 (def test-base-58-encoded-node-2
   "4XZF1Uo42B4SqecMdCTU6PNt727pWMJiSNzsVxpkgSPs9KYCh")
 
-(defn with-2-test-nodes
-  [f]
-  (go (let [node1 (a/<! (node/<new))
-            node2 (a/<! (node/<new))]
-        (node/start! node1)
-        (node/start! node2)
-        (a/<! (f [node1 node2]))
-        (node/stop! node1)
-        (node/stop! node2))))
-
-(deftest start!-test
-  (async done
-    (with-2-test-nodes
-      (fn [[node1 _node2]]
-        (go-loop []
-          (let [[event node & _args] (a/<! (::node/ch node1))]
-            (if (= ::node/start event)
-              (testing "node 1 started"
-                (is (= node1 node))
-                (done))
-              (recur))))))))
+(defn with-test-nodes
+  [n f]
+  (go (let [nodes (->> (repeatedly n node/<new)
+                       (a/merge)
+                       (a/into [])
+                       (a/<!))]
+        (dorun (map node/start! nodes))
+        (println "started" n "test nodes")
+        (a/<! (f nodes))
+        (println "stopping" n "test nodes")
+        (dorun (map node/stop! nodes))
+        )))
 
 (deftest connection-test
   (async done
-    (with-2-test-nodes
-      (fn [[node1 node2]]
-        (go-loop []
-          (let [[event node arg] (a/<! (::node/ch node1))]
-            (cond
-              (= event ::node/error)
-              (do (is (not arg))
-                  (done))
-              (and (= ::node/connect event)
-                     (= (:kahuin.p2p.keys/public node2) arg))
-              (testing "node 1 connects to node 2"
-                (is (= node1 node))
-                (done))
-              :default
-              (recur))))))))
+    (with-test-nodes 3
+      (fn [[node1 & _rest]]
+        (let [timeout-ch (a/timeout 30000)]
+          (go-loop []
+            (let [[[event _node arg] port] (a/alts! [timeout-ch (::node/event-ch node1)])]
+              (cond
+                (= timeout-ch port)
+                (do (is (not :timed-out))
+                    (done))
 
-(deftest put!-test
-  (async done
-    (with-2-test-nodes
-      (fn [[node1 _node2]]
-        (node/put! node1 "abc" :bar)
-        (go-loop []
-          (let [[event node & args] (a/<! (::node/ch node1))]
-            (case event
-              ::node/error
-              (do (is (not (first args)))
+                (= event ::node/error)
+                (do (is (not arg))
+                    (recur))
+
+                (and (= ::node/connect event) (not= (:kahuin.p2p.keys/public node1) arg))
+                (testing "node 1 connects to another node"
+                  (is true)
                   (done))
-              ::node/dht:put
-              (testing "node1 put"
-                (is (= node1 node))
-                (is (= ["abc" :bar] args))
-                (done))
-              (recur))))))))
+
+                :default (recur)))))))))
 
 (deftest put!-get!-test
   (async done
-    (with-2-test-nodes
-      (fn [[node1 node2]]
-        (node/put! node1 "abc" :bar)
-        (go-loop []
-          (let [timeout-ch (a/timeout 10000)
-                [val port] (a/alts! [timeout-ch (::node/ch node2)])]
-            (if (= timeout-ch port)
-              (do (is (not :timed-out))
-                  (done))
-              (let [[event node arg] val]
-                (case event
-                  ::node/error
-                  (do (is (not arg))
-                      (done))
-                  ; Wait for node2 to connect to node1
-                  ::node/connect
-                  (do (when (= arg (:kahuin.p2p.keys/public node1))
-                        (node/get! node2 "abc"))
-                      (recur))
-                  ::node/dht:put
-                  ; Then get
-                  (testing "node2 get"
-                    (is (= node2 node))
-                    (is (= ["abc" :bar] arg))
+    (with-test-nodes 5
+      (fn [[node1 & rest]]
+        (let [get-count (atom 0)
+              timeout-ch (a/timeout 30000)]
+          (go-loop []
+            (let [[[event node arg1 arg2] port] (a/alts! (concat [timeout-ch (::node/event-ch node1)]
+                                                                 (map ::node/event-ch rest)
+                                                                 (map ::node/dht-ch rest)))]
+              (cond
+                (= timeout-ch port)
+                (do (is (pos? @get-count))
                     (done))
-                  (recur))))))))))
+
+                (= ::node/error event)
+                (let [msg (:message arg1)]
+                  (when-not (= "Failed to lookup key! No peers from routing table!")
+                    (.warn js/console msg))
+                  (recur))
+
+                (and (= ::node/connect event) (= node1 node))
+                (do (node/put! node1 "abc" :bar)
+                    (recur))
+
+                (and (= ::node/connect event) (not= node1 node))
+                (do (node/get! node "abc")
+                    (recur))
+
+                (= ::node/dht:get event)
+                (do (is (= ["abc" :bar] [arg1 arg2]))
+                    (swap! get-count inc)
+                    (if (= (count rest) @get-count)
+                      (done)
+                      (recur)))
+
+                :default (recur)))))))))
