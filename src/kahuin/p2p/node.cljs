@@ -35,7 +35,7 @@
                    :webrtcStar {:enabled true, :interval 1000}}
    :relay {:enabled true, :hop {:enabled false, :active false}}
    :dht {:enabled true
-         :kBucketSize 5
+         :kBucketSize 20
          :randomWalk {:enabled true, :interval 300e3, :timeout 10e3}}})
 
 (defn- create-node*
@@ -51,9 +51,7 @@
     (.add (.-multiaddrs peer-info) (::transport/address transport))
     {::impl node
      ::event-ch (a/chan (a/sliding-buffer 16))
-     ::put-ch (a/chan (a/sliding-buffer 16))
-     ::dht-ch (a/chan (a/sliding-buffer 16))
-     }))
+     ::dht-ch (a/chan (a/sliding-buffer 16))}))
 
 (defn- <create-node
   [peer-id keypair]

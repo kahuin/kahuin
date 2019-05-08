@@ -30,9 +30,40 @@
 (defn- put-error! [ch err when]
   (a/put! ch [::error {:when when :error err}]))
 
+(def ^:private public-key-header
+  (js/Uint8Array. [8 2 18 33]))
+
+(defn- short->long-public-key-buffer
+  "Adds public-key-header to buffer"
+  [buf]
+  (let [offset (.-length public-key-header)
+        size (+ offset (.-length buf))
+        key-buf (buffer/Buffer. size)]
+    (.set key-buf public-key-header)
+    (.set key-buf buf offset)
+    key-buf))
+
+(defn- long->short-public-key-buffer
+  "Chops off the first 4 bytes of buf, and checks them against the key-header. Returns nil if the header is bad."
+  [buf]
+  (let [offset (.-length public-key-header)]
+    (when (= (.toString public-key-header) (.toString (js/Uint8Array. (.slice buf 0 offset))))
+      (.slice buf offset))))
+
+(defn- private-key->short-public-key-buffer
+  [private-key]
+  (long->short-public-key-buffer (.. private-key -public -bytes)))
+
+(defn- long-public-key-buffer->public-key
+  [buf]
+  (crypto/keys.unmarshalPublicKey buf))
+
+(s/fdef long-public-key-buffer->public-key :args (s/cat :buf encoding/buffer?))
+
 (defn- private-key->keypair
   [private-key]
-  {::public (encoding/buffer->base58 (.. private-key -public -bytes))
+  {::public (-> (private-key->short-public-key-buffer private-key)
+                (encoding/buffer->base58))
    ::private private-key})
 
 (s/fdef private-key->keypair :args (s/cat :private-key ::private) :ret ::keypair)
@@ -110,7 +141,9 @@
   ""
   [{::keys [public]} {:keys [data] ::keys [signature] :as signed}]
   (let [ch (a/chan 1)
-        public-key (crypto/keys.unmarshalPublicKey (encoding/base58->buffer public))
+        public-key (-> (encoding/base58->buffer public)
+                       (short->long-public-key-buffer)
+                       (long-public-key-buffer->public-key))
         signature-buffer (encoding/base58->buffer signature)]
     (.verify public-key
              (encoding/clj->buffer data)
@@ -128,17 +161,13 @@
 (defn- keypair->PeerId
   [keypair]
   (let [private-key (::private keypair)
-        public-key (.-public private-key)]
-    (PeerId. (.-bytes public-key) private-key public-key)))
+        long-public-key (.-public private-key)]
+    (PeerId. (private-key->short-public-key-buffer private-key) private-key long-public-key)))
 
 ;; Some monkey-patching
 
 (gobj/set
   PeerId
   "createFromPubKey"
-  (fn [pub-key-str-or-buf cb]
-    (let [buf (if (string? pub-key-str-or-buf)
-                (buffer/Buffer.from pub-key-str-or-buf "base64")
-                pub-key-str-or-buf)
-          public-key (crypto/keys.unmarshalPublicKey buf)]
-      (cb nil (PeerId. buf nil public-key)))))
+  (fn [buf cb]
+    (cb nil (PeerId. (long->short-public-key-buffer buf) nil (long-public-key-buffer->public-key buf)))))

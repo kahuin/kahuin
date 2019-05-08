@@ -24,7 +24,7 @@
     (go
       (testing "load node from base58 encoded string"
         (let [result (a/<! (node/<load test-base-58-encoded-node))]
-          (is (= "GZsJqUscK3AeyFzCo5UphzHQe6UjxKX6vfSKe6ebP9pmbkaZTp" (:kahuin.p2p.keys/public result)))
+          (is (= "23LAtRQKUZ8JLpLZnt53dqgRgKbmw7iSHe8tN3hxitpxr" (:kahuin.p2p.keys/public result)))
           (done))))))
 
 (deftest start!-stop!-test
@@ -55,12 +55,11 @@
         (println "started" n "test nodes")
         (a/<! (f nodes))
         (println "stopping" n "test nodes")
-        (dorun (map node/stop! nodes))
-        )))
+        (dorun (map node/stop! nodes)))))
 
 (deftest connection-test
   (async done
-    (with-test-nodes 3
+    (with-test-nodes 2
       (fn [[node1 & _rest]]
         (let [timeout-ch (a/timeout 30000)]
           (go-loop []

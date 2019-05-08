@@ -39,7 +39,7 @@
         (done)))))
 
 (def test-public-key
-  "GZsJqUscK3AeyFzCo5UphzHQe6UjxKX6vfSKe6ebP9pmbkaZTp")
+  "23LAtRQKUZ8JLpLZnt53dqgRgKbmw7iSHe8tN3hxitpxr")
 
 (def test-valid-message
   {::keys/signature test-signature
