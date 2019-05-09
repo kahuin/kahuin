@@ -6,13 +6,47 @@
 
 (st/instrument)
 
-(deftest clj->buffer->clj-test
-  (is (= nil (encoding/buffer->clj (encoding/clj->buffer nil))))
-  (is (= 1 (encoding/buffer->clj (encoding/clj->buffer 1))))
-  (is (= "foo" (encoding/buffer->clj (encoding/clj->buffer "foo"))))
-  (is (= [1 2 3] (encoding/buffer->clj (encoding/clj->buffer [1 2 3]))))
-  (is (= {} (encoding/buffer->clj (encoding/clj->buffer {}))))
-  (is (= {:x 1} (encoding/buffer->clj (encoding/clj->buffer {:x 1})))))
+(deftest bencode-roundtrip
+  (testing "can bencode integers"
+    (is (= 1 (encoding/bdecode (encoding/bencode 1)))))
+  (testing "can bencode strings"
+    (is (= "" (encoding/bdecode (encoding/bencode ""))))
+    (is (= "foo" (encoding/bdecode (encoding/bencode "foo"))))
+    (is (= "\uD83D\uDE01" (encoding/bdecode (encoding/bencode "\uD83D\uDE01")))))
+  (testing "can bencode lists and vectors"
+    (is (= [] (encoding/bdecode (encoding/bencode []))))
+    (is (= [1 2 3] (encoding/bdecode (encoding/bencode [1 2 3]))))
+    (is (= [1 2 3] (encoding/bdecode (encoding/bencode '(1 2 3)))))
+    (is (= [{:a 1 :b 2} "foo"] (encoding/bdecode (encoding/bencode [{:a 1 :b 2} "foo"])))))
+  (testing "can bencode maps with non-namespaced keyword keys"
+    (is (= {} (encoding/bdecode (encoding/bencode {}))))
+    (is (= {:x 1} (encoding/bdecode (encoding/bencode {:x 1}))))
+    (is (= {:x {:a 1 :b 2} :y [3 4]} (encoding/bdecode (encoding/bencode {:x {:a 1 :b 2} :y [3 4]}))))))
+
+(deftest bencode-gotchas
+  (testing "cannot bencode floats"
+    (is (thrown? js/Error (encoding/bencode 0.1)))
+    (is (thrown? js/Error (encoding/bencode -0.1))))
+  (testing "cannot bencode nil"
+    (is (thrown? js/Error (encoding/bencode nil))))
+  (testing "cannot bencode sets"
+    (is (thrown? js/Error (encoding/bencode #{:a}))))
+  (testing "cannot bencode keywords unless they are map keys"
+    (is (thrown? js/Error (encoding/bencode :kw)))
+    (is (thrown? js/Error (encoding/bencode {:k :v}))))
+  (testing "cannot bencode anything but keywords as map keys"
+    (is (thrown? js/Error (encoding/bencode {"a-string" 1})))
+    (is (thrown? js/Error (encoding/bencode {[42] 1}))))
+  (testing "cannot bencode namespaced keywords"
+    (is (thrown? js/Error (encoding/bencode {:foo/bar 1})))))
+
+(deftest bencode-bijection
+  (testing "equivalent maps are bencoded the same"
+    (is (= (encoding/bencode {:a 1 :b 2})
+           (encoding/bencode {:b 2 :a 1}))))
+  (testing "order of lists and vectors matters"
+    (is (not= (encoding/bencode [1 2])
+              (encoding/bencode [2 1])))))
 
 (def base58-chars "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
 

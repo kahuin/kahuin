@@ -1,9 +1,10 @@
 (ns kahuin.p2p.encoding
   (:require
     [cljs.spec.alpha :as s]
-    [clojure.edn :as edn]
+    [clojure.string :as string]
+    ["bencode-js" :as bencode]
     ["buffer" :as buffer]
-    ["multihashes" :as multihashes]))
+    ["bs58" :as bs58]))
 
 (defn buffer?
   [buf]
@@ -17,34 +18,66 @@
 (s/def ::buffer buffer?)
 (s/def ::base58 base58?)
 
+(s/def ::bencodeable
+  (s/or :bencode-string string?
+        :bencode-integer int?
+        :bencode-list (s/and sequential?
+                             (s/coll-of ::bencodeable))
+        :bencode-map (s/map-of (s/and keyword? (comp nil? namespace))
+                               ::bencodeable)))
+
+(defn bencode
+  "Bencodes clojure data into string"
+  [c]
+  (-> c
+      (clj->js)
+      (bencode/encode)))
+
+(s/fdef bencode :args (s/cat :c ::bencodeable) :ret string?)
+
+(defn bdecode
+  "Decodes bencoded string into clojure data"
+  [s]
+  (-> s
+      (bencode/decode)
+      (js->clj :keywordize-keys true)))
+
+(s/fdef bdecode :args (s/cat :s string?) :ret ::bencodeable)
+
 (def ^:private encoder (js/TextEncoder.))
 (def ^:private decoder (js/TextDecoder.))
 
 (defn clj->buffer
   "Encodes clojure data into buffer"
   [c]
-  (->> (prn-str c)
+  (->> c
+       (bencode)
        (.encode encoder)
-       (.from buffer/Buffer)))
+       (buffer/Buffer.from)))
 
 (s/fdef clj->buffer :args (s/cat :c any?) :ret ::buffer)
 
 (defn buffer->clj
   "Decodes buffer into clojure data"
   [buf]
-  (-> (.decode decoder buf)
-      (edn/read-string)))
+  (->> buf
+       (.decode decoder)
+       (bdecode)))
 
 (s/fdef buffer->clj :args (s/cat :buf ::buffer) :ret any?)
 
 (defn buffer->base58
   [buf]
-  (multihashes/toB58String buf))
+  (-> buf
+      (bs58/encode)
+      (string/reverse)))
 
 (s/fdef buffer->base58 :args (s/cat :buf ::buffer) :ret ::base58)
 
 (defn base58->buffer
   [b58]
-  (multihashes/fromB58String b58))
+  (-> b58
+      (string/reverse)
+      (bs58/decode)))
 
 (s/fdef base58->buffer :args (s/cat :b58 ::base58) :ret ::buffer)

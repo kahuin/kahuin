@@ -17,14 +17,14 @@
           (done))))))
 
 (def test-base-58-encoded-node
-  "4XZF1M9dcKK2sCUmhBgzCzhYXNkFt7iWdouFdoxEbMzbfuHBu")
+  "uBHufbzMbExodFuodWi7tFkNXYhzCzgBhmUCs2KKcd9M1FZX4")
 
 (deftest <load-test
   (async done
     (go
       (testing "load node from base58 encoded string"
         (let [result (a/<! (node/<load test-base-58-encoded-node))]
-          (is (= "23LAtRQKUZ8JLpLZnt53dqgRgKbmw7iSHe8tN3hxitpxr" (:kahuin.p2p.keys/public result)))
+          (is (= "rxptixh3Nt8eHSi7wmbKgRgqd35tnZLpLJ8ZUKQRtAL32" (:kahuin.p2p.keys/public result)))
           (done))))))
 
 (deftest start!-stop!-test
@@ -53,6 +53,7 @@
                        (a/<!))]
         (dorun (map node/start! nodes))
         (println "started" n "test nodes")
+        (println (map :kahuin.p2p.keys/public nodes))
         (a/<! (f nodes))
         (println "stopping" n "test nodes")
         (dorun (map node/stop! nodes)))))
@@ -102,7 +103,7 @@
                   (recur))
 
                 (and (= ::node/connect event) (= node1 node))
-                (do (node/put! node1 "abc" :bar)
+                (do (node/put! node1 "abc" {:data "bar"})
                     (recur))
 
                 (and (= ::node/connect event) (not= node1 node))
@@ -110,7 +111,7 @@
                     (recur))
 
                 (= ::node/dht:get event)
-                (do (is (= ["abc" :bar] [arg1 arg2]))
+                (do (is (= ["abc" {:data "bar"}] [arg1 arg2]))
                     (swap! get-count inc)
                     (if (= (count rest) @get-count)
                       (done)

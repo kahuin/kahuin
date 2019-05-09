@@ -13,6 +13,7 @@
     "release": "run-s release:*"
   },
   "dependencies": {
+    "bencode-js": "0.0.8",
     "create-react-class": "^15.6.2",
     "libp2p": "^0.25.2",
     "libp2p-kad-dht": "^0.14.13",

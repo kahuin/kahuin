@@ -16,7 +16,7 @@
         (done)))))
 
 (def test-private-key
-  "4XZF1M9dcKK2sCUmhBgzCzhYXNkFt7iWdouFdoxEbMzbfuHBu")
+  "uBHufbzMbExodFuodWi7tFkNXYhzCzgBhmUCs2KKcd9M1FZX4")
 
 (deftest keypair->base58-test
   (async done
@@ -26,7 +26,7 @@
         (done)))))
 
 (def test-signature
-  "AN1rKvtFoBbDRBQpdj4XDPjorcqb8HYbiPigkYQp9rP3bEJCKG99n9vbH1YaCuBFK6ZLemVTzS1R7Qxwn15JXuqHWnXJ1cbyH")
+  "iaXcKgRFJcSAPWw6qFj1UAs59sHePsqe3irN1MKMg5F2GYGUPJrWSmkNN84isA5B8vEKS3JF6NjSe1wiXLo2Tvpfb9ZXy183")
 
 (deftest <signed-test
   (async done
@@ -39,7 +39,7 @@
         (done)))))
 
 (def test-public-key
-  "23LAtRQKUZ8JLpLZnt53dqgRgKbmw7iSHe8tN3hxitpxr")
+  "rxptixh3Nt8eHSi7wmbKgRgqd35tnZLpLJ8ZUKQRtAL32")
 
 (def test-valid-message
   {::keys/signature test-signature
@@ -47,7 +47,7 @@
    :other 1})
 
 (def test-bad-signature
-  "381yXZJJ379fQRnFE6tnQ8zBDQRyd8Bq8z1MpZi5wfj6yZzcBdGgb9jG29WKQ29jCmFxNeJBdRDhWspgg4VAYybokzNvdDe6")
+  "6eDdvNzkobyYAV4ggpsWhDRdBJeNxFmCj92QKW92Gj9bgGdBczZy6jfw5iZpM1z8qB8dyRQDBz8Qnt6EFnRQf973JJZXy183")
 
 (deftest <validated-test
   (async done
