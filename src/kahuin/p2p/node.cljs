@@ -68,7 +68,7 @@
 
 (defn <load
   "Creates and returns a channel that contains the node loaded from the base58-encoded or `[::error nil error-map]`."
-  [base58-encoded]
+  [base58-encoded _opts]
   (go
     (let [keypair (a/<! (keys/<keypair base58-encoded))]
       (a/<! (<create-node (keys/keypair->PeerId keypair) keypair)))))
@@ -77,10 +77,10 @@
 
 (defn <new
   "Creates and returns a channel that contains a new node or `[::error nil error-map]`."
-  []
+  [opts]
   (go (let [keypair (a/<! (keys/<new-keypair))
             base58-encoded (keys/keypair->base58 keypair)]
-        (a/<! (<load base58-encoded)))))
+        (a/<! (<load base58-encoded opts)))))
 
 (s/fdef <new :ret chan?)
 

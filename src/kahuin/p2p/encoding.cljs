@@ -26,6 +26,10 @@
         :bencode-map (s/map-of (s/and keyword? (comp nil? namespace))
                                ::bencodeable)))
 
+(defn bencodable?
+  [c]
+  (s/valid? ::bencodeable c))
+
 (defn bencode
   "Bencodes clojure data into string"
   [c]

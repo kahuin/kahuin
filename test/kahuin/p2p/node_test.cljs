@@ -4,6 +4,7 @@
     [cljs.core.async.impl.protocols :as async-protocols]
     [cljs.test :refer [deftest testing is async]]
     [kahuin.p2p.node :as node]
+    [kahuin.p2p.fake-node :as fake-node]
     [orchestra-cljs.spec.test :as st]))
 
 (st/instrument)
@@ -12,7 +13,7 @@
   (async done
     (go
       (testing "create a new node"
-        (let [result (a/<! (node/<new))]
+        (let [result (a/<! (node/<new {}))]
           (is (some? result))
           (done))))))
 
@@ -23,14 +24,14 @@
   (async done
     (go
       (testing "load node from base58 encoded string"
-        (let [result (a/<! (node/<load test-base-58-encoded-node))]
+        (let [result (a/<! (node/<load test-base-58-encoded-node {}))]
           (is (= "rxptixh3Nt8eHSi7wmbKgRgqd35tnZLpLJ8ZUKQRtAL32" (:kahuin.p2p.keys/public result)))
           (done))))))
 
 (deftest start!-stop!-test
   (async done
     (go
-      (let [node (a/<! (node/<load test-base-58-encoded-node))]
+      (let [node (a/<! (node/<load test-base-58-encoded-node {}))]
         (testing "start node"
           (node/start! node)
           (is (= [::node/start node] (a/<! (::node/event-ch node)))))
@@ -47,16 +48,20 @@
 
 (defn with-test-nodes
   [n f]
-  (go (let [nodes (->> (repeatedly n node/<new)
+  (go (let [use-fake true
+            fake-network (when use-fake (fake-node/fake-network))
+            nodes (->> (repeatedly n #((if use-fake fake-node/<new node/<new) {:fake-network fake-network}))
                        (a/merge)
                        (a/into [])
                        (a/<!))]
-        (dorun (map node/start! nodes))
+        (dorun (map (if use-fake fake-node/start! node/start!) nodes))
         (println "started" n "test nodes")
         (println (map :kahuin.p2p.keys/public nodes))
-        (a/<! (f nodes))
+        (with-redefs [node/put! (if use-fake fake-node/put! node/put!)
+                      node/get! (if use-fake fake-node/get! node/get!)]
+          (a/<! (f nodes)))
         (println "stopping" n "test nodes")
-        (dorun (map node/stop! nodes)))))
+        (dorun (map fake-node/stop! nodes)))))
 
 (deftest connection-test
   (async done
