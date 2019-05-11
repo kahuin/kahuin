@@ -2,6 +2,7 @@
   (:require
     [cljs.core.async :as a :refer [go]]
     [cljs.spec.alpha :as s]
+    [kahuin.p2p.dht :as dht]
     [kahuin.p2p.encoding :as encoding]
     [kahuin.p2p.keys :as keys]
     [kahuin.p2p.transport :as transport]
@@ -15,10 +16,11 @@
   [ch]
   (instance? cljs.core.async.impl.channels/ManyToManyChannel ch))
 
-(s/def ::impl #(instance? Node %))
+(s/def ::impl some?)
 (s/def ::event-ch chan?)
-(s/def ::dht-ch chan?)
-(s/def ::node (s/keys :req [::impl ::event-ch ::dht-ch ::keys/private ::keys/public]))
+(s/def ::node (s/and
+                ::keys/keypair
+                (s/keys :req [::impl ::event-ch ::dht/request-ch ::dht/response-ch])))
 
 (s/def ::event (s/cat :event-type keyword? :node ::node :args (s/* some?)))
 
@@ -51,29 +53,31 @@
     (.add (.-multiaddrs peer-info) (::transport/address transport))
     {::impl node
      ::event-ch (a/chan (a/sliding-buffer 16))
-     ::dht-ch (a/chan (a/sliding-buffer 16))}))
+     ::dht/impl (.-dht node)
+     ::dht/request-ch (a/chan (a/sliding-buffer 16))
+     ::dht/response-ch (a/chan (a/sliding-buffer 16))}))
 
 (defn- <create-node
-  [peer-id keypair]
+  [peer-id keypair opts]
   (let [ch (a/chan 1)]
     (PeerInfo/create
       peer-id
       (fn [err peer-info]
         (if err (put-error! ch nil err ::create-node)
-                (a/put! ch (merge keypair (create-node* peer-info))))
+                (a/put! ch (merge keypair {::opts opts} (create-node* peer-info))))
         (a/close! ch)))
     ch))
 
-(s/fdef <create-node :args (s/cat :peer-id some? :keypair ::keys/keypair) :ret chan?)
+(s/fdef <create-node :args (s/cat :peer-id some? :keypair ::keys/keypair :opts map?) :ret chan?)
 
 (defn <load
   "Creates and returns a channel that contains the node loaded from the base58-encoded or `[::error nil error-map]`."
-  [base58-encoded _opts]
+  [base58-encoded opts]
   (go
     (let [keypair (a/<! (keys/<keypair base58-encoded))]
-      (a/<! (<create-node (keys/keypair->PeerId keypair) keypair)))))
+      (a/<! (<create-node (keys/keypair->PeerId keypair) keypair opts)))))
 
-(s/fdef <load :args (s/cat :base58-encoded encoding/base58?) :ret chan?)
+(s/fdef <load :args (s/cat :base58-encoded encoding/base58? :opts map?) :ret chan?)
 
 (defn <new
   "Creates and returns a channel that contains a new node or `[::error nil error-map]`."
@@ -111,33 +115,19 @@
             (when err
               (put-error! event-ch node err ::start!)
               (stop! node))))
+  (dht/start! node)
   nil)
 
 (s/fdef start! :args (s/cat :node ::node) :ret nil?)
 
-(defn put!
-  ""
-  [{::keys [impl event-ch] :as node} key value]
-  (.put (.-dht impl)
-        (encoding/base58->buffer key)
-        (encoding/clj->buffer value)
-        (fn [err]
-          (when err
-            (put-error! event-ch node err ::put!))))
-  nil)
-
-(s/fdef put! :args (s/cat :node ::node :key encoding/base58? :value any?) :ret nil?)
-
-(defn get!
-  ""
-  [{::keys [impl event-ch dht-ch] :as node} key]
-  (.get (.-dht impl)
-        (encoding/base58->buffer key)
-        #js {}
-        (fn [err buf]
-          (if err
-            (put-error! event-ch node err ::get!)
-            (a/put! dht-ch [::dht:get node key (encoding/buffer->clj buf)]))))
-  nil)
-
-(s/fdef get! :args (s/cat :node ::node :key encoding/base58?) :ret nil?)
+;(defn get!
+;  [{::dht/keys [get!-fn] :as node} & args]
+;  (apply get!-fn node args))
+;
+;(s/fdef get! :args (s/cat :node ::node :key encoding/base58?) :ret nil?)
+;
+;(defn put!
+;  [{::dht/keys [put!-fn] :as node} & args]
+;  (apply put!-fn node args))
+;
+;(s/fdef put! :args (s/cat :node ::node :key encoding/base58? :value any?) :ret nil?)
