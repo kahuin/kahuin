@@ -1,4 +1,5 @@
 (ns kahuin.p2p.node
+  "Nodes are composed of a DHT and a keypair."
   (:require
     [cljs.core.async :as a :refer [go]]
     [cljs.spec.alpha :as s]
@@ -20,16 +21,23 @@
 (s/def ::event-ch chan?)
 (s/def ::node (s/and
                 ::keys/keypair
-                (s/keys :req [::impl ::event-ch ::dht/request-ch ::dht/response-ch])))
+                ::dht/dht
+                (s/keys :req [::impl ::event-ch])))
 
-(s/def ::event (s/cat :event-type keyword? :node ::node :args (s/* some?)))
+(s/def ::peer (s/keys :req [::keys/public]))
 
-(defn- put-error! [ch node ^js/Error js-error when]
+(defn- put-node-error! [ch node ^js/Error js-error when]
   (a/put! ch [::error node {:when when :message (.-message js-error)}]))
 
 (defn- peer-info->id
   [peer-info]
   (.toB58String (.-id peer-info)))
+
+(defn- peer-info->peer
+  [peer-info]
+  {::keys/public (peer-info->id peer-info)})
+
+(s/fdef peer-info->peer :args (s/cat :peer-info some?) :ret ::peer)
 
 (def ^:private default-config
   {:peerDiscovery {:autoDial true
@@ -41,7 +49,7 @@
          :randomWalk {:enabled true, :interval 300e3, :timeout 10e3}}})
 
 (defn- create-node*
-  [peer-info]
+  [peer-info keypair opts]
   (let [id (peer-info->id peer-info)
         transport (transport/init id)
         options {:peerInfo peer-info
@@ -49,13 +57,13 @@
                                  {:streamMuxer [mplex spdy]
                                   :dht Kad})
                  :config default-config}
-        node (Node. (clj->js options))]
+        impl (Node. (clj->js options))
+        node {::impl impl
+              ::event-ch (a/chan (a/sliding-buffer 16))
+              ::opts opts}
+        dht (dht/new (.-dht impl))]
     (.add (.-multiaddrs peer-info) (::transport/address transport))
-    {::impl node
-     ::event-ch (a/chan (a/sliding-buffer 16))
-     ::dht/impl (.-dht node)
-     ::dht/request-ch (a/chan (a/sliding-buffer 16))
-     ::dht/response-ch (a/chan (a/sliding-buffer 16))}))
+    (merge keypair dht node)))
 
 (defn- <create-node
   [peer-id keypair opts]
@@ -63,8 +71,8 @@
     (PeerInfo/create
       peer-id
       (fn [err peer-info]
-        (if err (put-error! ch nil err ::create-node)
-                (a/put! ch (merge keypair {::opts opts} (create-node* peer-info))))
+        (if err (put-node-error! ch nil err ::create-node)
+                (a/put! ch (create-node* peer-info keypair opts)))
         (a/close! ch)))
     ch))
 
@@ -89,45 +97,32 @@
 (s/fdef <new :ret chan?)
 
 (defn stop!
-  ""
+  "Stops the node."
   [{::keys [impl event-ch] :as node}]
   (.removeAllListeners impl)
   (.stop impl
          (fn [err]
            (when err
-             (put-error! event-ch node err ::stop!))
+             (put-node-error! event-ch node err ::stop!))
            (a/close! event-ch)))
   nil)
 
-(s/fdef stop! :args (s/cat :node ::node))
+(s/fdef stop! :args (s/cat :node ::node) :ret nil?)
 
 (defn start!
   "Given a node, starts it.
-   On start the node's ::ch will start getting events, starting with a
+   On start the node's ::event-ch will start getting events, starting with a
    ::start event."
   [{::keys [impl event-ch] :as node}]
   (.on impl "start" (fn [] (a/put! event-ch [::start node])))
-  (.on impl "error" (fn [err] (put-error! event-ch node err ::impl)))
-  (.on impl "peer:connect" (fn [peer-info] (a/put! event-ch [::connect node (peer-info->id peer-info)])))
-  (.on impl "peer:disconnect" (fn [peer-info] (a/put! event-ch [::disconnect node (peer-info->id peer-info)])))
+  (.on impl "error" (fn [err] (put-node-error! event-ch node err ::impl)))
+  (.on impl "peer:connect" (fn [peer-info] (a/put! event-ch [::connect node (peer-info->peer peer-info)])))
+  (.on impl "peer:disconnect" (fn [peer-info] (a/put! event-ch [::disconnect node (peer-info->peer peer-info)])))
   (.start impl
           (fn [err]
             (when err
-              (put-error! event-ch node err ::start!)
+              (put-node-error! event-ch node err ::start!)
               (stop! node))))
-  (dht/start! node)
   nil)
 
 (s/fdef start! :args (s/cat :node ::node) :ret nil?)
-
-;(defn get!
-;  [{::dht/keys [get!-fn] :as node} & args]
-;  (apply get!-fn node args))
-;
-;(s/fdef get! :args (s/cat :node ::node :key encoding/base58?) :ret nil?)
-;
-;(defn put!
-;  [{::dht/keys [put!-fn] :as node} & args]
-;  (apply put!-fn node args))
-;
-;(s/fdef put! :args (s/cat :node ::node :key encoding/base58? :value any?) :ret nil?)

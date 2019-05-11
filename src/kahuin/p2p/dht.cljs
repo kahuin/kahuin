@@ -12,7 +12,7 @@
 (s/def ::response-ch chan?)
 (s/def ::dht (s/keys :req [::impl ::request-ch ::response-ch]))
 
-(defn- put-error! [ch dht error-msg when]
+(defn- put-dht-error! [ch dht error-msg when]
   (a/put! ch [::error dht {:when when :message error-msg}]))
 
 (defn- handle-put-request
@@ -22,7 +22,9 @@
         (encoding/clj->buffer value)
         (fn [err]
           (when err
-            (put-error! response-ch dht (.-message err) ::put!)))))
+            (put-dht-error! response-ch dht (.-message err) ::put!)))))
+
+(s/fdef handle-put-request :args (s/cat :dht ::dht :key encoding/base58? :value encoding/bencodable?))
 
 (defn- handle-get-request
   [{::keys [impl response-ch] :as dht} key]
@@ -31,15 +33,33 @@
         #js {}
         (fn [err buf]
           (if err
-            (put-error! response-ch dht (.-message err) ::get!)
+            (put-dht-error! response-ch dht (.-message err) ::get!)
             (a/put! response-ch [::get dht key (encoding/buffer->clj buf)])))))
 
-(defn start!
-  [{::keys [request-ch response-ch] :as dht}]
-  (go-loop []
-    (let [[req key value] (a/<! request-ch)]
-      (case req
-        ::get (handle-get-request dht key)
-        ::put (handle-put-request dht key value)
-        (put-error! response-ch dht (str "Unknown request " req) ::request)))
-    (recur)))
+(s/fdef handle-get-request :args (s/cat :dht ::dht :key encoding/base58?))
+
+(defn new
+  "Creates a DHT.
+  This contains ::request-ch and ::response-ch channels.
+  To perform DHT requests, put either
+    [::get key]
+  or
+    [::put key value]
+  pn the ::request-ch.
+  The response channel will contain [::get dht key value] or [::error dht {:when ... :message ...}]."
+  [impl]
+  (let [request-ch (a/chan (a/sliding-buffer 16))
+        response-ch (a/chan (a/sliding-buffer 16))
+        dht {::impl impl
+             ::request-ch request-ch
+             ::response-ch response-ch}]
+    (go-loop []
+      (let [[req key value] (a/<! request-ch)]
+        (case req
+          ::get (handle-get-request dht key)
+          ::put (handle-put-request dht key value)
+          (put-dht-error! response-ch dht (str "Unknown request " req) ::request)))
+      (recur))
+    dht))
+
+(s/fdef new :args (s/cat :impl ::impl) :ret ::dht)

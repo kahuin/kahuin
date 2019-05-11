@@ -6,7 +6,7 @@
     [kahuin.p2p.dht :as dht]
     [kahuin.p2p.keys :as keys]
     [kahuin.p2p.node :as node]
-    [kahuin.p2p.fake-node :as fake-node]
+    [kahuin.p2p.node-test-util :as node-test-util]
     [orchestra-cljs.spec.test :as st]))
 
 (st/instrument)
@@ -42,25 +42,6 @@
           (is (= (async-protocols/closed? (::node/event-ch node)))))
         (done)))))
 
-(defn- <new-test-nodes
-  [n use-fake]
-  (go (let [fake-network (when use-fake (fake-node/fake-network))]
-        (->> (repeatedly n (fn []
-                             (if use-fake (fake-node/<new {:fake-network fake-network})
-                                          (node/<new {}))))
-             (a/merge)
-             (a/into [])
-             (a/<!)))))
-
-(defn with-test-nodes
-  [fake-or-real n f]
-  (go (let [use-fake (= :fake fake-or-real)
-            nodes (a/<! (<new-test-nodes n use-fake))]
-        (dorun (map (if use-fake fake-node/start! node/start!) nodes))
-        (println "started" n "test nodes" (map ::keys/public nodes))
-        (a/<! (f nodes))
-        (dorun (map (if use-fake fake-node/stop! node/stop!) nodes)))))
-
 (defn connection-test [[node1 & _rest] done]
   (let [timeout-ch (a/timeout 30000)]
     (go-loop []
@@ -76,18 +57,18 @@
 
           (and (= ::node/connect event) (not= (::keys/public node1) arg))
           (testing "node 1 connects to another node"
-            (is true)
+            (is (contains? arg ::keys/public))
             (done))
 
           :default (recur))))))
 
 (deftest connection-test-fake
   (async done
-    (with-test-nodes :fake 2 #(connection-test % done))))
+    (node-test-util/with-test-nodes 2 #(connection-test % done))))
 
 (deftest connection-test-real
   (async done
-    (with-test-nodes :real 2 #(connection-test % done))))
+    (node-test-util/with-test-nodes :real 2 #(connection-test % done))))
 
 (defn put!-get!-test [[node1 & rest] done]
   (let [get-count (atom 0)
@@ -112,11 +93,9 @@
             (recur))
 
           (and (= ::node/connect event) (= node1 node))
-          (do (a/>! (::dht/request-ch node) [::dht/put test-key test-value])
-              (recur))
-
-          (and (= ::node/connect event) (not= node1 node))
-          (do (a/>! (::dht/request-ch node) [::dht/get test-key])
+          (do (a/>! (::dht/request-ch node1) [::dht/put test-key test-value])
+              (doseq [n rest]
+                (a/put! (::dht/request-ch n) [::dht/get test-key]))
               (recur))
 
           (= ::dht/get event)
@@ -130,8 +109,8 @@
 
 (deftest put!-get!-test-fake
   (async done
-    (with-test-nodes :fake 5 #(put!-get!-test % done))))
+    (node-test-util/with-test-nodes 5 #(put!-get!-test % done))))
 
 (deftest put!-get!-test-real
   (async done
-    (with-test-nodes :real 5 #(put!-get!-test % done))))
+    (node-test-util/with-test-nodes :real 5 #(put!-get!-test % done))))
