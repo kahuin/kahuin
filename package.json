@@ -2,14 +2,15 @@
   "name": "kahuin",
   "version": "0.1.0",
   "scripts": {
+    "cljs-deps": "shadow-cljs info",
     "webrtc-server": "webrtc-star",
     "test:karma": "shadow-cljs compile karma-test && karma start --single-run",
-    "test": "run-p webrtc-server test:karma",
+    "test": "run-p --race webrtc-server test:karma",
     "watch:cljs": "shadow-cljs watch browser test",
     "watch": "run-p webrtc-server watch:*",
     "release:cljs": "shadow-cljs release browser",
     "release:html": "mkdir -p release && cp public/index.html release",
-    "release:report": "shadow-cljs run shadow.cljs.build-report browser release-report.html",
+    "release:report": "mkdir -p report && shadow-cljs run shadow.cljs.build-report browser report/release.html",
     "release": "run-s release:*"
   },
   "dependencies": {

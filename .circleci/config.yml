@@ -1,0 +1,99 @@
+version: 2.1
+aliases:
+  - &npm_deps_cache_key npm-deps-cache-{{ checksum "package.json" }}
+  - &cljs_deps_cache_key cljs-deps-cache-{{ checksum "shadow-cljs.edn" }}
+
+executors:
+  without-browsers:
+    docker:
+      - image: circleci/openjdk:11-node
+  with-browsers:
+    docker:
+      - image: circleci/openjdk:11-node-browsers
+
+commands:
+  restore_caches:
+    steps:
+      - restore_cache:
+          key: *npm_deps_cache_key
+          name: Restoring NPM cache
+      - restore_cache:
+          key: *cljs_deps_cache_key
+          name: Restoring CLJS cache
+
+  save_caches:
+    steps:
+      - save_cache:
+          key: *npm_deps_cache_key
+          name: Saving NPM cache
+          paths:
+            - node_modules
+      - save_cache:
+          key: *cljs_deps_cache_key
+          name: Saving CLJS cache
+          paths:
+            - .shadow-cljs
+            - ~/.m2
+
+jobs:
+  deps:
+    executor: without-browsers
+    steps:
+      - checkout
+      - restore_caches
+
+      - run:
+          name: Update NPM
+          command: "sudo npm install -g npm@latest"
+      - run:
+          name: Install NPM deps
+          command: npm install
+
+      - run:
+          name: Install CLJS deps
+          command: npm run cljs-deps
+
+      - save_caches
+
+  test:
+    executor: with-browsers
+    steps:
+      - checkout
+      - restore_caches
+
+      - run:
+          name: Run Karma tests
+          command: npm run test
+
+  release:
+    executor: without-browsers
+    steps:
+      - checkout
+      - restore_caches
+
+      - run:
+         name: Build release version
+         command: npm run release
+
+      - store_artifacts:
+          path: report
+          destination: report
+
+      - store_artifacts:
+          path: release
+          destination: release
+
+workflows:
+  version: 2
+  test_and_release:
+    jobs:
+      - deps
+
+      - test:
+          requires:
+            - deps
+
+      - release:
+          requires:
+            - deps
+            - test
