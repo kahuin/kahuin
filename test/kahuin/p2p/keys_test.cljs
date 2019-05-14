@@ -56,12 +56,12 @@
             invalid-data-message (assoc test-valid-message :data "FOO")
             invalid-signature-message (assoc test-valid-message ::keys/signature test-bad-signature)]
         (testing "valid signature"
-          (let [{:keys [data other] ::keys/keys [valid]} (a/<! (keys/<validated test-keypair test-valid-message))]
+          (let [{:keys [data other] ::keys/keys [veridic]} (a/<! (keys/<verified test-keypair test-valid-message))]
             (is (= (:data test-valid-message) data))
             (is (= (:other test-valid-message) other))
-            (is (true? valid))))
+            (is (true? veridic))))
         (testing "invalid data"
-          (is (false? (::keys/valid (a/<! (keys/<validated test-keypair invalid-data-message))))))
+          (is (false? (::keys/veridic (a/<! (keys/<verified test-keypair invalid-data-message))))))
         (testing "invalid signature"
-          (is (false? (::keys/valid (a/<! (keys/<validated test-keypair invalid-signature-message))))))
+          (is (false? (::keys/veridic (a/<! (keys/<verified test-keypair invalid-signature-message))))))
         (done)))))

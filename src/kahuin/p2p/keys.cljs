@@ -23,9 +23,9 @@
 (s/def ::signed (s/keys :req [::signature]
                         :req-unq [:data]))
 
-(s/def ::valid boolean?)
-(s/def ::validated (s/keys :req [::signature ::valid]
-                           :req-unq [:data]))
+(s/def ::veridic boolean?)
+(s/def ::verified (s/keys :req [::signature ::veridic]
+                          :req-unq [:data]))
 
 (defn- put-error! [ch err when]
   (a/put! ch [::error {:when when :error err}]))
@@ -129,15 +129,15 @@
         :args (s/cat :keypair (s/keys :req [::private]), :msg ::message)
         :ret chan?)
 
-(defn- signed->validated
-  [signed valid]
-  (assoc signed ::valid valid))
+(defn- signed->verified
+  [signed veridic]
+  (assoc signed ::veridic veridic))
 
-(s/fdef signed->validated
-        :args (s/cat :signed ::signed :valid ::valid)
-        :ret ::validated)
+(s/fdef signed->verified
+        :args (s/cat :signed ::signed :veridic ::veridic)
+        :ret ::verified)
 
-(defn <validated
+(defn <verified
   ""
   [{::keys [public]} {:keys [data] ::keys [signature] :as signed}]
   (let [ch (a/chan 1)
@@ -148,13 +148,13 @@
     (.verify public-key
              (encoding/clj->buffer data)
              signature-buffer
-             (fn [err valid]
-               (if err (put-error! ch err ::validate)
-                       (a/put! ch (signed->validated signed valid)))
+             (fn [err veridic]
+               (if err (put-error! ch err ::verification)
+                       (a/put! ch (signed->verified signed veridic)))
                (a/close! ch)))
     ch))
 
-(s/fdef <validated
+(s/fdef <verified
         :args (s/cat :keypair (s/keys :req [::public]), :msg ::signed)
         :ret chan?)
 
