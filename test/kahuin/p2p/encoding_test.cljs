@@ -1,5 +1,7 @@
 (ns kahuin.p2p.encoding-test
   (:require
+    [cljs.spec.alpha :as s]
+    [cljs.spec.gen.alpha :as gen]
     [cljs.test :refer [deftest testing is]]
     [kahuin.p2p.encoding :as encoding]
     [orchestra-cljs.spec.test :as st]))
@@ -21,7 +23,11 @@
   (testing "can bencode maps with non-namespaced keyword keys"
     (is (= {} (encoding/bdecode (encoding/bencode {}))))
     (is (= {:x 1} (encoding/bdecode (encoding/bencode {:x 1}))))
-    (is (= {:x {:a 1 :b 2} :y [3 4]} (encoding/bdecode (encoding/bencode {:x {:a 1 :b 2} :y [3 4]}))))))
+    (is (= {:x {:a 1 :b 2} :y [3 4]} (encoding/bdecode (encoding/bencode {:x {:a 1 :b 2} :y [3 4]})))))
+  (testing "generated bencodeables"
+    (doseq [bencodeable (gen/sample (s/gen ::encoding/bencodeable))]
+      (is (= bencodeable (-> (encoding/bencode bencodeable)
+                             (encoding/bdecode)))))))
 
 (deftest bencode-gotchas
   (testing "cannot bencode floats"
@@ -48,15 +54,7 @@
     (is (not= (encoding/bencode [1 2])
               (encoding/bencode [2 1])))))
 
-(def base58-chars "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz")
-
 (deftest base58->buffer->base58
-  (doall
-    (for [b58 [""
-               "j"
-               "123foo"
-               base58-chars
-               (reduce str (shuffle base58-chars))
-               (reduce str (repeat 10 base58-chars))]]
-      (is (= b58 (-> (encoding/base58->buffer b58)
-                     (encoding/buffer->base58)))))))
+  (doseq [b58 (gen/sample (s/gen ::encoding/base58) 20)]
+    (is (= b58 (-> (encoding/base58->buffer b58)
+                   (encoding/buffer->base58))))))

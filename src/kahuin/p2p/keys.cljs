@@ -2,6 +2,7 @@
   (:require
     [cljs.core.async :as a :refer-macros [go]]
     [cljs.spec.alpha :as s]
+    [cljs.spec.gen.alpha :as gen]
     [kahuin.p2p.encoding :as encoding]
     [goog.object :as gobj]
     ["buffer" :as buffer]
@@ -13,19 +14,52 @@
   [ch]
   (instance? cljs.core.async.impl.channels/ManyToManyChannel ch))
 
-(s/def ::public encoding/base58?)
+(s/def ::data ::encoding/bencodeable)
+
+(def ^:private public-key-gen
+  (gen/elements ["MQ29yX3mKYZ74XjwhxMzxScMGZw7ko9W61bFjbQzHkeg"
+                 "EyACut6PhLuAyJc2Rs29jHbm6v7pMbaMGqx81D9GPi2v"
+                 "WxcYNDv2tYcsL5uQWsnZnmEK41igMjNg5MaQzr4wKUee"
+                 "mbDb6r3F5FkA8LgHAPtNU189MgDXraiyyBBwvMxeHUv22"
+                 "wxFRJbXWjycffjfVBkwxWcEcfr96C8KAApj11Hmh7jdr"
+                 "7RLfC7H3mYEwbJNu4JaSVugXcoNwhag6Vekwvb7hkjT22"
+                 "3v8NKKdEL9gbznHALLrCiLv9XqCtYxm2gNqV9oPEMxbx"
+                 "XNYE1oHL81tKsV7ThnNwJshEB3NKCjJWjDnnojQNub5p"
+                 "kGQJPi8iaLVjJNsUhxTwcyjpafxiAKpQR4ECyFoFSf5z"
+                 "wYvGQBddfB1HdHGWYtkZ5EkfP9aQZAt4wN9TPRWcGEGp"
+                 "Y6d5JNx8s8uWV8S1ukoeB4eBjcGcMjpedUMNaz8ryAzg"
+                 "k4pFdYVwcYu3XHHUr95Aqu3dFP1vLfHQ3TiRBxhFezhw"
+                 "uG6zsrwg8tAhuiEBoytycw91qiUFfaFfFEeDY7tBGcs32"
+                 "ckcWAiy6Mw2hgnJi7C4XoUvh43i751Eaau3ykDzmBBGf"
+                 "imKBbn4EjYtaEwJ4katPhrLzxioXmYowiA9q6JgxCkzz"
+                 "nrPPYNe3Vq9NRs6NhdmBDod5y2qKBSiD5bvqjv2jLtQq"
+                 "JinE1nxbSJsVnvniV8afuKDxiougHTwzvLbXtk14LYXy"
+                 "7fhp6rgp2QiMZhxAqzjFhnLGJ5viCCmRue52cvsnAgEm"
+                 "FQVQRosUpDc2AU1ZSh6PPA6KCaMj8Z6FLLqX3VfSRxu22"
+                 "KkgKg2N9ptX9bwk3jr7PhBv8Ge4SK1Xpk3pxaCF6Ztiw"
+                 "hTRQUDrSDFFxctxTXEntEcfXnYavHj6eT8tNV8VNT39e"
+                 "tBYeGFm4XybsF6SNUZDQHbHPVgQjJ3fLEQvMYTGTrG7d"
+                 "aNaaY37T8T4eQ1mpoentaSgMSdX4aQyKHTHtNF64CvAv"
+                 "cwT4hg671h3YqJhMQRCpWv9kwfFmSgazaX4Q7YYD3zo62"
+                 "KTSyZ62xHe5X9mwkmMiVjvSkGDTL3AP6e1AT8Af8NND52"
+                 "fVWvmTD1N9U9Ub7cK4BwDgpL5JSrrit7xKJaexKX8Vam"
+                 "FBm5B5J6emjsTUss8YNc2tm1ED1F2FKQVT1nxH4zue4v"]))
+
+(s/def ::public (s/with-gen (s/and ::encoding/base58 #(<= 44 (count %) 45))
+                            (constantly public-key-gen)))
 (s/def ::private any?)
 (s/def ::keypair (s/keys :req [::public ::private]))
 
-(s/def ::message (s/keys :req-unq [:data]))
+(s/def ::message (s/keys :req-un [::data]))
 
-(s/def ::signature encoding/base58?)
+(s/def ::signature (s/with-gen (s/and ::encoding/base58 #(<= 96 (count %) 97))
+                               #(encoding/base-58-gen 97)))
 (s/def ::signed (s/keys :req [::signature]
-                        :req-unq [:data]))
+                        :req-un [::data]))
 
 (s/def ::veridic boolean?)
 (s/def ::verified (s/keys :req [::signature ::veridic]
-                          :req-unq [:data]))
+                          :req-un [::data]))
 
 (defn- put-error! [ch err when]
   (a/put! ch [::error {:when when :error err}]))
@@ -122,7 +156,7 @@
                   (if err (put-error! ch err ::sign)
                           (a/put! ch (message->signed msg sig-buf)))
                   (a/close! ch))]
-    (.sign private (encoding/clj->buffer data) on-sign)
+    (.sign private (encoding/clj->bencoded-buffer data) on-sign)
     ch))
 
 (s/fdef <signed
@@ -146,7 +180,7 @@
                        (long-public-key-buffer->public-key))
         signature-buffer (encoding/base58->buffer signature)]
     (.verify public-key
-             (encoding/clj->buffer data)
+             (encoding/clj->bencoded-buffer data)
              signature-buffer
              (fn [err veridic]
                (if err (put-error! ch err ::verification)

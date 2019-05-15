@@ -1,7 +1,9 @@
 (ns kahuin.p2p.encoding
   (:require
     [cljs.spec.alpha :as s]
+    [cljs.spec.gen.alpha :as gen]
     [clojure.string :as string]
+    [clojure.test.check.generators :as tcheck-gen]
     ["bencode-js" :as bencode]
     ["buffer" :as buffer]
     ["bs58" :as bs58]))
@@ -10,21 +12,36 @@
   [buf]
   (instance? buffer/Buffer buf))
 
+(def ^:private base58-charset (set "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"))
+
 (defn base58?
   [s]
   (and (string? s)
-       (every? (set "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz") s)))
+       (every? base58-charset s)))
+
+(def ^:private base-58-char-gen (gen/elements base58-charset))
+
+(defn base-58-gen
+  ([]
+   (gen/fmap clojure.string/join (gen/vector base-58-char-gen)))
+  ([l]
+   (gen/fmap clojure.string/join (gen/vector base-58-char-gen l))))
 
 (s/def ::buffer buffer?)
-(s/def ::base58 base58?)
+(s/def ::base58 (s/with-gen base58? base-58-gen))
+
+(s/def ::bencodeable-scalar
+  (s/or :bencode-string string?
+        :bencode-integer int?))
+
+(def ^:private gen-valid-keyword (gen/fmap keyword tcheck-gen/symbol-name-or-namespace))
 
 (s/def ::bencodeable
-  (s/or :bencode-string string?
-        :bencode-integer int?
-        :bencode-list (s/and sequential?
-                             (s/coll-of ::bencodeable))
-        :bencode-map (s/map-of (s/and keyword? (comp nil? namespace))
-                               ::bencodeable)))
+  (s/or :bencode-scalar ::bencodeable-scalar
+        :bencode-list (s/with-gen (s/and sequential? (s/coll-of ::bencodeable))
+                                  (constantly (gen/vector-distinct (s/gen ::bencodeable-scalar))))
+        :bencode-map (s/with-gen (s/map-of simple-keyword? ::bencodeable)
+                                 (constantly (gen/map gen-valid-keyword (s/gen ::bencodeable-scalar))))))
 
 (defn bencodable?
   [c]
@@ -51,7 +68,7 @@
 (def ^:private encoder (js/TextEncoder.))
 (def ^:private decoder (js/TextDecoder.))
 
-(defn clj->buffer
+(defn clj->bencoded-buffer
   "Encodes clojure data into buffer"
   [c]
   (->> c
@@ -59,16 +76,16 @@
        (.encode encoder)
        (buffer/Buffer.from)))
 
-(s/fdef clj->buffer :args (s/cat :c any?) :ret ::buffer)
+(s/fdef clj->bencoded-buffer :args (s/cat :c any?) :ret ::buffer)
 
-(defn buffer->clj
+(defn bencoded-buffer->clj
   "Decodes buffer into clojure data"
   [buf]
   (->> buf
        (.decode decoder)
        (bdecode)))
 
-(s/fdef buffer->clj :args (s/cat :buf ::buffer) :ret any?)
+(s/fdef bencoded-buffer->clj :args (s/cat :buf ::buffer) :ret any?)
 
 (defn buffer->base58
   [buf]

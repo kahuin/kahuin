@@ -19,7 +19,7 @@
   [{::keys [impl response-ch] :as dht} key value]
   (.put impl
         (encoding/base58->buffer key)
-        (encoding/clj->buffer value)
+        (encoding/clj->bencoded-buffer value)
         (fn [err]
           (when err
             (put-dht-error! response-ch dht (.-message err) ::put!)))))
@@ -34,7 +34,7 @@
         (fn [err buf]
           (if err
             (put-dht-error! response-ch dht (.-message err) ::get!)
-            (a/put! response-ch [::get dht key (encoding/buffer->clj buf)])))))
+            (a/put! response-ch [::get dht key (encoding/bencoded-buffer->clj buf)])))))
 
 (s/fdef handle-get-request :args (s/cat :dht ::dht :key encoding/base58?))
 
