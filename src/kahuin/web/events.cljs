@@ -1,2 +1,2 @@
 (ns kahuin.web.events
-  (:require [kahuin.gossip.core]))
+  (:require [kahuin.gossip.broker]))
