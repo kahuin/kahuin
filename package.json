@@ -24,7 +24,8 @@
     "libp2p-spdy": "^0.13.3",
     "libp2p-webrtc-star": "^0.15.8",
     "react": "^16.0.0",
-    "react-dom": "^16.0.0"
+    "react-dom": "^16.0.0",
+    "tweetnacl": "^1.0.1"
   },
   "devDependencies": {
     "karma": "^4.1.0",
