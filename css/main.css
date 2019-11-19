@@ -1,0 +1,17 @@
+@tailwind base;
+@tailwind components;
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+.spinner {
+  @apply border-t-2 border-l-2 border-gray-500 rounded-full spin;
+}
+
+@tailwind utilities;
