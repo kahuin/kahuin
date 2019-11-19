@@ -10,7 +10,7 @@
     "watch:css":"postcss --watch --use tailwindcss -o public/css/screen.css css/*.css",
     "watch": "run-p webrtc-server watch:*",
     "release:cljs": "shadow-cljs release browser",
-    "release:css":"postcss --use autoprefixer --use tailwindcss -o public/css/screen.css css/*.css",
+    "release:css":"mkdir -p release/css && postcss --use autoprefixer --use tailwindcss -o release/css/screen.css css/*.css",
     "release:html": "mkdir -p release && cp public/index.html release",
     "release:report": "mkdir -p report && shadow-cljs run shadow.cljs.build-report browser report/release.html",
     "release": "run-s release:*"
