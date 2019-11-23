@@ -14,4 +14,42 @@
   @apply border-t-2 border-l-2 border-gray-500 rounded-full spin;
 }
 
+.icon {
+  background-repeat: no-repeat;
+  background-position-y: 1px;
+}
+
+.icon-news {
+  background-image: svg-load('queue.svg', fill=#a0aec0, stroke=#a0aec0);
+}
+
+.icon-pin {
+  background-image: svg-load('pin.svg', fill=#a0aec0, stroke=#a0aec0);
+}
+
+.icon-pinned {
+  background-image: svg-load('pin.svg', fill=#ed64a6, stroke=#ed64a6);
+  background-position-y: 2px;
+}
+
+.icon-post {
+  background-image: svg-load('pen-tool.svg', fill=#a0aec0, stroke=#a0aec0);
+}
+
+.icon-user {
+  background-image: svg-load('user.svg', fill=#a0aec0, stroke=#a0aec0);
+}
+
+.icon-user-add {
+  background-image: svg-load('add-outline.svg', fill=#a0aec0, stroke=#a0aec0);
+}
+
+.icon-user-added {
+  background-image: svg-load('add-solid.svg', fill=#ed64a6, stroke=#fff);
+}
+
+.icon-quote {
+  background-image: svg-load('reply.svg', fill=#a0aec0, stroke=#fff);
+}
+
 @tailwind utilities;
