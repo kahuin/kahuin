@@ -1,7 +1,10 @@
 {:dependencies [[binaryage/devtools "0.9.7"]
+                [bidi "2.1.6"]
+                [kibu/pushy "0.3.8"]
                 [reagent "0.8.0"]
                 [re-frame "0.10.6"]
-                [orchestra "2018.12.06-2"]]
+                [orchestra "2018.12.06-2"]
+                [clojure-humanize "0.2.2"]]
  :nrepl {:port 7000}
  :source-paths ["src" "test"]
  :builds {:browser {:target :browser
