@@ -60,6 +60,9 @@ jobs:
           name: Run Karma tests
           command: npm run test
 
+      - store_test_results:
+          path: ./report
+
   release:
     executor: without-browsers
     steps:
