@@ -22,17 +22,15 @@
                        (s/keys :req [::request-ch ::response-ch])))
 
 (defn- <update-timer
-  [secs]
-  (let [millis (* 1000 secs)
-        ch (a/chan (a/dropping-buffer 1))]
+  [millis]
+  (let [ch (a/chan (a/dropping-buffer 1))]
     (js/setInterval #(a/put! ch [::timer (js/Date.)]) millis)
     ch))
 
 (defn- <create-broker
   [{:keys [private-key db update-interval db-key]
-    :or {db (atom {})
-         db-key ::profile
-         update-interval 20}
+    :or {db-key ::profile
+         update-interval 20000}
     :as opts}]
   (go
     (let [node (a/<! (if private-key (node/<load private-key opts)
@@ -40,6 +38,7 @@
           request-ch (a/chan (a/sliding-buffer 16))
           response-ch (a/chan (a/sliding-buffer 16))
           timer-ch (<update-timer update-interval)
+          db (or db (atom {db-key {}}))
           broker (assoc node ::request-ch request-ch
                              ::response-ch response-ch
                              ::timer-ch timer-ch
@@ -61,18 +60,18 @@
   [{::keys [db db-key]}]
   (db-key @db))
 
-(defn update-profile!
+(defn- update-profile!
   [{::keys [db db-key]} now k f & args]
   (swap! db (fn [val]
               (-> val
                   (update-in [db-key k] #(apply f % args))
                   (assoc-in [db-key :updated-at] now)))))
 
-(defn assoc-profile!
+(defn- assoc-profile!
   [broker now k val]
   (update-profile! broker now k (constantly val)))
 
-(defn sync-profile!
+(defn- sync-profile!
   [{::keys [db db-key] :as broker} now]
   (let [{:keys [nick pinned]} (profile broker)
         profile-contents {:nick (or nick "")
