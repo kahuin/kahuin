@@ -1,4 +1,4 @@
-(ns kahuin.p2p.fake-node
+(ns kahuin.p2p.node.fake-node
   "Fake implementation of kahuin.p2p.node that uses a local atom to store the pseudo-DHT
    To use, first create a fake-network to pass as :fake-network option to <new
    Up to 16 fake nodes can be created per network.

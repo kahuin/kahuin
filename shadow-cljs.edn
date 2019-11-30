@@ -22,4 +22,5 @@
                  :devtools {:http-port 8020
                             :http-root "public/test"}}
           :karma-test {:target :karma
+                       :ns-regexp "(-test$|-test-real$)"
                        :output-to "target/karma-test.js"}}}

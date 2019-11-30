@@ -1,46 +1,38 @@
-(ns kahuin.p2p.node-test
+(ns kahuin.p2p.node.test-util
   (:require
     [cljs.core.async :as a :refer-macros [go go-loop]]
-    [cljs.core.async.impl.protocols :as async-protocols]
     [cljs.test :refer [deftest testing is async]]
     [kahuin.p2p.dht :as dht]
     [kahuin.p2p.keys :as keys]
     [kahuin.p2p.node :as node]
-    [kahuin.p2p.node-test-util :as node-test-util]
-    [orchestra-cljs.spec.test :as st]))
+    [kahuin.p2p.node.fake-node :as fake-node]))
 
-(st/instrument)
+(defn- <new-test-nodes
+  [fake-contents n]
+  (go (let [use-real (= :real fake-contents)
+            fake-network (when-not use-real (fake-node/fake-network fake-contents))]
+        (->> (repeatedly n (fn []
+                             (if use-real (node/<new {})
+                                          (fake-node/<new {:fake-network fake-network}))))
+             (a/merge)
+             (a/into [])
+             (a/<!)))))
 
-(deftest <new-test
-  (async done
-    (go
-      (testing "create a new node"
-        (let [result (a/<! (node/<new {}))]
-          (is (some? result))
-          (done))))))
+(defn with-test-nodes
+  "Create n test fake test nodes and call f with the collection of nodes as argument.
+  fake-contents is the initial contents of the fake DHT.
 
-(def test-base-58-encoded-node
-  "uBHufbzMbExodFuodWi7tFkNXYhzCzgBhmUCs2KKcd9M1FZX4")
-
-(deftest <load-test
-  (async done
-    (go
-      (testing "load node from base58 encoded string"
-        (let [result (a/<! (node/<load test-base-58-encoded-node {}))]
-          (is (= "rxptixh3Nt8eHSi7wmbKgRgqd35tnZLpLJ8ZUKQRtAL32" (::keys/public result)))
-          (done))))))
-
-(deftest start!-stop!-test
-  (async done
-    (go
-      (let [node (a/<! (node/<load test-base-58-encoded-node {}))]
-        (testing "start node"
-          (node/start! node)
-          (is (= [::node/start node] (a/<! (::node/event-ch node)))))
-        (testing "stop node"
-          (node/stop! node)
-          (is (= (async-protocols/closed? (::node/event-ch node)))))
-        (done)))))
+  If fake-contents is :real then actually uses real node implementation."
+  ([n f]
+   (with-test-nodes {} n f))
+  ([fake-contents n f]
+   (assert (or (map? fake-contents) (= :real fake-contents)))
+   (go (let [use-real (= :real fake-contents)
+             nodes (a/<! (<new-test-nodes fake-contents n))]
+         (dorun (map (if use-real node/start! fake-node/start!) nodes))
+         (println "started" n "test nodes" (map :kahuin.p2p.keys/public nodes))
+         (a/<! (f nodes))
+         (dorun (map (if use-real node/stop! fake-node/stop!) nodes))))))
 
 (defn connection-test [[node1 & _rest] done]
   (let [timeout-ch (a/timeout 30000)]
@@ -61,14 +53,6 @@
             (done))
 
           :default (recur))))))
-
-(deftest connection-test-fake
-  (async done
-    (node-test-util/with-test-nodes 2 #(connection-test % done))))
-
-(deftest connection-test-real
-  (async done
-    (node-test-util/with-test-nodes :real 2 #(connection-test % done))))
 
 (defn put!-get!-test [[node1 & rest] done]
   (let [get-count (atom 0)
@@ -106,11 +90,3 @@
                 (recur)))
 
           :default (recur))))))
-
-(deftest put!-get!-test-fake
-  (async done
-    (node-test-util/with-test-nodes 5 #(put!-get!-test % done))))
-
-(deftest put!-get!-test-real
-  (async done
-    (node-test-util/with-test-nodes :real 5 #(put!-get!-test % done))))
