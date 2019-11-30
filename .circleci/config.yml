@@ -1,6 +1,6 @@
 version: 2.1
 aliases:
-  - &npm_deps_cache_key npm-deps-cache-{{ checksum "package.json" }}
+  - &npm_deps_cache_key npm-deps-cache-{{ checksum "package-lock.json" }}
   - &cljs_deps_cache_key cljs-deps-cache-{{ checksum "shadow-cljs.edn" }}
 
 executors:
