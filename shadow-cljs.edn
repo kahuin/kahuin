@@ -1,4 +1,5 @@
 {:dependencies [[binaryage/devtools "0.9.7"]
+                [re-frisk "0.5.3"]
                 [bidi "2.1.6"]
                 [kibu/pushy "0.3.8"]
                 [reagent "0.8.0"]
@@ -13,7 +14,7 @@
                                :http-root "public"
                                :http-handler shadow.http.push-state/handle
                                :after-load kahuin.web.main/render}
-                    :dev {:modules {:base {:entries [devtools.preload kahuin.web.main]}}}
+                    :dev {:modules {:base {:entries [devtools.preload re-frisk.preload kahuin.web.main]}}}
                     :release {:modules {:base {:entries [kahuin.web.main]}}
                               :output-dir "release/js"
                               :compiler-options {:optimizations :advanced}}}
