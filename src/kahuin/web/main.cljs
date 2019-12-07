@@ -1,5 +1,6 @@
 (ns kahuin.web.main
   (:require
+    [kahuin.gossip.re-frame :as gossip]
     [kahuin.web.events :as events]
     [kahuin.web.routes :as routes]
     [kahuin.web.views.core :as views]
@@ -10,6 +11,6 @@
   (reagent/render [views/root] (js/document.getElementById "app")))
 
 (defn ^:export init []
+  (gossip/init!)
   (routes/init)
-  (re-frame/dispatch [::events/initialise-demo-db])
   (render))

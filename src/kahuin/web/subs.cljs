@@ -1,30 +1,24 @@
 (ns kahuin.web.subs
   (:require
+    [kahuin.gossip.re-frame :as gossip]
     [re-frame.core :as re-frame]))
 
 (re-frame/reg-sub
   ::active-panel
   (fn [db _] (:active-panel db)))
 
-(defn profile-by-user-id
-  [db user-id]
-  (assoc (get-in db [:profiles user-id]) :id user-id))
-
-(re-frame/reg-sub
-  ::profiles-raw
-  (fn [db _]
-    (:profiles db)))
-
 (re-frame/reg-sub
   ::user-profile
-  (fn [db [_ user-id]]
-    (profile-by-user-id db user-id)))
+  :<- [::gossip/profiles]
+  (fn [profiles [_ id]]
+    (assoc (get profiles id) :id id)))
 
 (re-frame/reg-sub
   ::my-profile
-  (fn [db _]
-    (let [user-id (-> db :credentials :public-key)]
-      (profile-by-user-id db user-id))))
+  :<- [::gossip/profiles]
+  :<- [::gossip/id]
+  (fn [[profiles id] _]
+    (assoc (get profiles id) :id id)))
 
 (re-frame/reg-sub
   ::following-ids
@@ -38,13 +32,8 @@
   (fn [profile _]
     (set (:pinned profile))))
 
-(re-frame/reg-sub
-  ::gossip-raw
-  (fn [db _]
-    (:gossip db)))
-
 (defn gossip-display
-  [gossip-raw following-ids pinned-keys profiles-raw]
+  [gossip-raw profiles-raw following-ids pinned-keys]
   (->> gossip-raw
        (map (fn [[key gossip]]
               [key (let [author-id (:author gossip)
@@ -58,12 +47,12 @@
 
 (re-frame/reg-sub
   ::gossip-display
-  :<- [::gossip-raw]
+  :<- [::gossip/gossip]
+  :<- [::gossip/profiles]
   :<- [::following-ids]
   :<- [::pinned-keys]
-  :<- [::profiles-raw]
-  (fn [[gossip-raw following-ids pinned-keys profiles-raw] _]
-    (gossip-display gossip-raw following-ids pinned-keys profiles-raw)))
+  (fn [[gossip-raw profiles-raw following-ids pinned-keys] _]
+    (gossip-display gossip-raw profiles-raw following-ids pinned-keys)))
 
 (re-frame/reg-sub
   ::news

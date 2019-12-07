@@ -28,51 +28,39 @@
     ch))
 
 (defn- <create-broker
-  [{:keys [private-key db update-interval db-key]
-    :or {db-key ::profile
-         update-interval 20000}
+  [{:keys [private-key db update-interval]
+    :or {update-interval 20000}
     :as opts}]
   (go
-    (let [node (a/<! (if private-key (node/<load private-key opts)
-                                     (node/<new opts)))
+    (let [node-opts (dissoc opts :db :update-interval :private-key)
+          node (a/<! (if private-key (node/<load private-key node-opts)
+                                     (node/<new node-opts)))
           request-ch (a/chan (a/sliding-buffer 16))
           response-ch (a/chan (a/sliding-buffer 16))
           timer-ch (<update-timer update-interval)
-          db (or db (atom {db-key {}}))
+          db (or db (atom {}))
           broker (assoc node ::request-ch request-ch
                              ::response-ch response-ch
                              ::timer-ch timer-ch
-                             ::db db
-                             ::db-key db-key)]
+                             ::db db)]
       broker)))
 
 (defn- put-record-to-dht!
   [broker record]
   (go
+    (.info js/console "Putting record to dht" record)
     (let [[result & args] (a/<! (records/<to-dht-key-value broker record))]
-      (println result)
       (if (= ::records/error result)
         (a/put! (::response-ch broker) [::error args])
         (do (a/put! (::dht/request-ch broker) (into [::dht/put] args))
             true)))))
 
 (defn profile
-  [{::keys [db db-key]}]
-  (db-key @db))
-
-(defn- update-profile!
-  [{::keys [db db-key]} now k f & args]
-  (swap! db (fn [val]
-              (-> val
-                  (update-in [db-key k] #(apply f % args))
-                  (assoc-in [db-key :updated-at] now)))))
-
-(defn- assoc-profile!
-  [broker now k val]
-  (update-profile! broker now k (constantly val)))
+  [{::keys [db]}]
+  (:profile @db))
 
 (defn- sync-profile!
-  [{::keys [db db-key] :as broker} now]
+  [{::keys [db] :as broker} now]
   (let [{:keys [nick pinned]} (profile broker)
         profile-contents {:nick (or nick "")
                           :pinned (vec pinned)}]
@@ -80,32 +68,22 @@
                                                 ::records/author (::keys/public broker)
                                                 ::records/inst now
                                                 ::records/contents profile-contents}))
-          (swap! db #(assoc-in % [db-key :put-at] now))))))
+          (swap! db #(assoc-in % [::profile :put-at] now))))))
 
 (defmulti handle-event (fn [_broker event] (first event)))
 
-(defmethod handle-event ::node/start [_b _ev]
+(defmethod handle-event ::node/start [_broker _ev]
   :noop)
 
-(defmethod handle-event ::node/connect [_b _ev]
+(defmethod handle-event ::node/connect [_broker _ev]
   :noop)
 
-(defmethod handle-event ::set-nick [broker [_ now nick]]
-  (assoc-profile! broker now :nick nick))
+(defmethod handle-event ::update-profile [{::keys [db]} [_ now profile]]
+  (swap! db
+         (fn [db]
+           (update db :profile #(merge % profile {:updated-at now})))))
 
-(defmethod handle-event ::pin [broker [_ now id]]
-  (update-profile! broker now :pinned conj-to-set id))
-
-(defmethod handle-event ::unpin [broker [_ now id]]
-  (update-profile! broker now :pinned disj id))
-
-(defmethod handle-event ::follow [broker [_ now id]]
-  (update-profile! broker now :following conj-to-set id))
-
-(defmethod handle-event ::unfollow [broker [_ now id]]
-  (update-profile! broker now :following disj id))
-
-(defmethod handle-event ::gossip [broker [_ now contents]]
+(defmethod handle-event ::publish-gossip [broker [_ now contents]]
   (put-record-to-dht! broker {::records/type :gossip
                               ::records/author (::keys/public broker)
                               ::records/inst now
@@ -116,10 +94,10 @@
     (when (< put-at updated-at)
       (sync-profile! broker now))))
 
-(defmethod handle-event ::stop [_b _ev]
+(defmethod handle-event ::stop [_broker _ev]
   :stop)
 
-(defmethod handle-event :default [_b event]
+(defmethod handle-event :default [_broker event]
   (.warn js/console "Unknown event, stopping broker" event)
   :stop)
 

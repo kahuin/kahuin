@@ -57,9 +57,9 @@
            :following false
            :pinned true}}
          (subs/gossip-display (-> test-db :gossip)
+                              (-> test-db :profiles)
                               (-> test-db :profiles vals first :following)
-                              (-> test-db :profiles vals first :pinned)
-                              (-> test-db :profiles))))
+                              (-> test-db :profiles vals first :pinned))))
   (is (= {"Ssc3tKXiBcjDyRP1cCiuvmJt3UaQ3daqzxjKvZ2kpceU"
           {:author "xFfBjQfhQFz9wk54QCm8CxCyrE7yAFNPvx9WAZ2ewTzg"
            :timestamp #inst "2019-11-27"
@@ -85,8 +85,8 @@
            :following false
            :pinned false}}
          (subs/gossip-display (-> test-db :gossip)
+                              (-> test-db :profiles)
                               (-> test-db :profiles vals second :following)
-                              (-> test-db :profiles vals second :pinned)
-                              (-> test-db :profiles)))))
+                              (-> test-db :profiles vals second :pinned)))))
 
 

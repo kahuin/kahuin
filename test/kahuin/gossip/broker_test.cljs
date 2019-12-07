@@ -24,48 +24,23 @@
             start-date (js/Date.)]
         (testing "created broker"
           (is (s/valid? ::broker/broker broker))
-          (is (some? (broker/profile broker)))
-          (is (empty? (broker/profile broker))))
-        (testing "can set nick"
-          (a/>! request-ch [::broker/set-nick start-date "foo"])
+          (is (some? (::broker/db broker))))
+        (testing "can update profile"
+          (a/>! request-ch [::broker/update-profile {:nick "foo"}])
           (loop []
             (a/<! (a/timeout 100))
             (let [nick (:nick (broker/profile broker))]
               (if (empty? nick)
                 (recur)
                 (is (= "foo" nick))))))
-        (testing "can pin"
-          (a/>! request-ch [::broker/pin start-date test-gossip-id])
+        (testing "can publish gossip"
+          (a/>! request-ch [::broker/publish-gossip start-date test-gossip-id])
           (loop []
             (a/<! (a/timeout 100))
             (let [pinned (:pinned (broker/profile broker))]
               (if (empty? pinned)
                 (recur)
                 (is (= #{test-gossip-id} pinned))))))
-        (testing "can unpin"
-          (a/>! request-ch [::broker/unpin start-date test-gossip-id])
-          (loop []
-            (a/<! (a/timeout 100))
-            (let [pinned (:pinned (broker/profile broker))]
-              (if (empty? pinned)
-                (is (= #{} pinned))
-                (recur)))))
-        (testing "can follow"
-          (a/>! request-ch [::broker/follow start-date test-peer-id])
-          (loop []
-            (a/<! (a/timeout 100))
-            (let [following (:following (broker/profile broker))]
-              (if (empty? following)
-                (recur)
-                (is (= #{test-peer-id} following))))))
-        (testing "can unfollow"
-          (a/>! request-ch [::broker/unfollow start-date test-peer-id])
-          (loop []
-            (a/<! (a/timeout 100))
-            (let [following (:following (broker/profile broker))]
-              (if (empty? following)
-                (is (= #{} following))
-                (recur)))))
         (testing "does sync periodically"
           (is (< start-date (:put-at (broker/profile broker)))))
         (done)))))
